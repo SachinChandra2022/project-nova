@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Project Nova - Drone Command Center</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div id="map"></div>
+    <div id="alert-panel">
+        <h3>🚨 Critical Alerts</h3>
+        <ul id="alerts-list">
+            <!-- Alerts will be added here by JavaScript -->
+        </ul>
+    </div>
+
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script>
+        
+        const map = L.map('map').setView([26.8467, 80.9462], 13);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // --- Drone Marker Management ---
+        const drones = {}; // Store drone markers by their ID
+
+        // --- WebSocket Connection ---
+        const socket = io();
+        const alertsList = document.getElementById('alerts-list');
+
+        socket.on('connect', () => {
+            console.log('Connected to server!');
+        });
+
+        // --- Event Listener for Telemetry Updates ---
+        socket.on('update_telemetry', (data) => {
+            const droneId = data.drone_id;
+            const lat = data.latitude;
+            const lon = data.longitude;
+            const popupContent = `
+                <b>Drone:</b> ${droneId}<br>
+                <b>Battery:</b> ${data.battery}%<br>
+                <b>Status:</b> ${data.status}
+            `;
+
+            if (drones[droneId]) {
+                // Drone exists, update its position and popup
+                drones[droneId].setLatLng([lat, lon]);
+                drones[droneId].getPopup().setContent(popupContent);
+            } else {
+                // New drone, create a marker
+                const marker = L.marker([lat, lon]).addTo(map);
+                marker.bindPopup(popupContent).openPopup();
+                drones[droneId] = marker;
+            }
+        });
+
+        // --- Event Listener for New Alerts ---
+        socket.on('new_alert', (data) => {
+            console.log("New alert received:", data);
+            const li = document.createElement('li');
+            li.className = `alert-${data.level.toLowerCase()}`;
+            li.innerHTML = `<strong>${data.alert_type}</strong>: ${data.message}`;
+            alertsList.prepend(li); // Add new alerts to the top
+        });
+    </script>
+</body>
+</html>
